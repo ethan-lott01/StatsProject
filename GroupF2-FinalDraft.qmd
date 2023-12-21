@@ -1,0 +1,118 @@
+---
+title: "Macronutrients and Nutrition"
+format: pdf
+editor: visual
+---
+
+## Abstract
+
+Our project sought to use data from Open Food Facts, a collaborative food products database, in order to create a regression model and predict how macronutrients, proteins, carbohydrates, and fats, impact the nutritional quality of different food products. After wrangling the nutrition score from categorical grades to integers, we constructed a model to predict nutrition score based of the amount of proteins, carbohydrates, and fats per one hundred grams of the food product.
+
+## Introduction
+
+Macronutrients are our dietary source of energy and allow the body to function​. The three types of macronutrients are proteins, carbohydrates, and fats​. Each of the macronutrients are required in different amounts for the body to function optimally​. Finding and eating food products that contribute to this optimal functionality can be difficult. By looking the amount of these macronutrients in food we can attempt to determine how they affect the food's nutritional value. However, our model cannot be used for inference due to it not passing the condition checks.
+
+## Data
+
+```{r, message=FALSE}
+library(skimr)
+library(tidyverse)
+library(dplyr)
+Food = read.csv("~/Library/CloudStorage/OneDrive-UniversityofSt.Thomas/STAT320/group-F2-food-data.csv", header=TRUE)
+```
+
+```{r}
+Food <- Food %>% 
+  select(proteins_100g, nutrition_grade_fr, fat_100g, 
+         carbohydrates_100g, product_name)
+str(Food)
+```
+
+```{r}
+Food$nutrition_grade_fr <- 
+  gsub("a","5",as.character(Food$nutrition_grade_fr))
+Food$nutrition_grade_fr <- 
+  gsub("b","4",as.character(Food$nutrition_grade_fr))
+Food$nutrition_grade_fr <- 
+  gsub("c","3",as.character(Food$nutrition_grade_fr))
+Food$nutrition_grade_fr <- 
+  gsub("d","2",as.character(Food$nutrition_grade_fr))
+Food$nutrition_grade_fr <- 
+  gsub("e","1",as.character(Food$nutrition_grade_fr))
+Food$nutrition_grade_fr <- 
+  as.numeric(Food$nutrition_grade_fr)
+Food <- na.omit(Food)
+#Food <- na.omit(Food) removed a sizable amount of cases from our dataset due 
+#to one or more of the 5 variables being blank (NA). However, we believe that 
+#this is acceptable due to the large size of the data set.
+```
+
+```{r}
+Food <- Food %>% 
+  filter(proteins_100g <= 100, proteins_100g >= 0, carbohydrates_100g <= 100,
+          carbohydrates_100g >= 0, fat_100g <= 100, fat_100g >= 0)
+  
+#These values were outside the bounds. It is impossible to have more than 100g 
+#per 100g in carbohydrates, fats, and protein. It is also impossible to have a 
+#negative amount of grams per 100g. There were 18 cases that violated these rules.
+```
+
+## Model
+
+```{r}
+ggplot(Food) + geom_histogram(aes(x=proteins_100g))
+ggplot(Food) + geom_histogram(aes(x=carbohydrates_100g))
+ggplot(Food) + geom_histogram(aes(x=fat_100g))
+```
+
+Each variable's histogram is skewed heavily to the right. The carbohydrates histogram is bi-modal right skewed. They are all measured numerically in real numbers that include a decimal. These histograms show the need to log transform our model.
+
+```{r}
+m1 <- lm(nutrition_grade_fr ~ proteins_100g + carbohydrates_100g 
+         + fat_100g, data = Food)
+summary(m1)
+```
+
+For every 1 gram of protein per 100 grams of food, the nutrition score can be expected to increase by 0.002284, holding all else constant.
+
+For every 1 gram of carbohydrates per 100 grams of food, the nutrition score can be expected to decrease by 0.01177, holding all else constant.
+
+For every 1 gram of fat per 100 grams of food, the nutrition score can be expected to decrease by 0.04383, holding all else constant.
+
+```{r}
+plot(m1, which = 1)
+plot(m1, which = 2)
+```
+
+This model violates all conditions except for independence. In order to try to fix this, we will log transform our model because each variable is right skewed in its respective histogram distribution.
+
+```{r}
+m2 <- lm(nutrition_grade_fr ~ log1p(proteins_100g) + log1p(carbohydrates_100g)
+         + log1p(fat_100g), data = Food)
+summary(m2)
+```
+
+For every log of 1 gram of protein per 100 grams of food, the nutrition score can be expected to increase by 0.357433, holding all else constant.
+
+For every log of 1 gram of carbohydrates per 100 grams of food, the nutrition score can be expected to decrease by 0.129370, holding all else constant.
+
+For every log of 1 gram of fat per 100 grams of food, the nutrition score can be expected to decrease by 0.673022, holding all else constant.
+
+## Condition Checks
+
+```{r}
+plot(m2, which = 1)
+plot(m2, which = 2)
+```
+
+The model violates normality and equality of variance. This means that we cannot use the model for inference, but we can better understand how it relates to the data set.
+
+## Conclusion
+
+The end goal of this project was to determine how micronutrients impacted the nutritional value of different foods. It accomplishes this for the food within the data set with limitations.
+
+While the model we used seemed to make sense (more fat or carbs would by common sense make something less nutritious), we feel its potentially incomplete without the presence of other important explanatory variables. We did not have the ability to use sugars or sodium just because their values were missing from the data set. We also had to filter out several rows from the dataset because the values for our explanatory variables either made no sense (being over 100 or under 0) or were missing. Including these missing explanatory variables would probably serve to bring up the percent of variability which for our final log model was only 37.09%. 
+
+The logged final model also additionally violates normality and equality of variance, but is both linear and independent.
+
+What our model does give us, is a good idea of what sort of impact three statistically significant micronutrients have on nutrition in respect to each other and overall nutritional value.
